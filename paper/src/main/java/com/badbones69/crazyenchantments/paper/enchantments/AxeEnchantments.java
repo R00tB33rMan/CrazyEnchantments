@@ -73,7 +73,11 @@ public class AxeEnchantments implements Listener {
         Map<CEnchantment, Integer> enchantments = this.enchantmentBookSettings.getEnchantments(currentItem);
         if (!EnchantUtils.isMassBlockBreakActive(player, CEnchantments.TREEFELLER, enchantments)) return;
 
-        Set<Block> blockList = getTree(event.getBlock(), 5 * enchantments.get(CEnchantments.TREEFELLER.getEnchantment()));
+        String blockType = event.getBlock().getType().toString();
+        if (!(blockType.endsWith("_LOG") || blockType.endsWith("_STEM"))) return;
+
+        int level = enchantments.get(CEnchantments.TREEFELLER.getEnchantment());
+        Set<Block> blockList = getTree(event.getBlock(), 10 * level);
         boolean damage = FileManager.Files.CONFIG.getFile().getBoolean("Settings.EnchantmentOptions.TreeFeller-Full-Durability", true);
 
         if (!new MassBlockBreakEvent(player, blockList).callEvent()) return;
@@ -95,23 +99,24 @@ public class AxeEnchantments implements Listener {
         checkedBlocks.add(startBlock);
         int startX = startBlock.getX(), startZ = startBlock.getZ();
 
+        String woodType = getWoodType(startBlock.getType());
+        if (woodType == null) return tree;
+
         while (!queue.isEmpty()) {
             Block currentBlock = queue.poll();
 
             for (int x = -1; x <= 1; x++) {
                 for (int z = -1; z <= 1; z++) {
                     for (int y = -1; y <= 1; y++) {
-                        if (tree.size() > maxBlocks) break;
+                        if (tree.size() >= maxBlocks) break;
                         if (x == 0 && y == 0 && z == 0) continue; // Skip initial block.
 
                         Block neighbor = currentBlock.getRelative(x, y, z);
                         if (neighbor.isEmpty() || checkedBlocks.contains(neighbor)) continue;
                         if (notInRange(startX, neighbor.getX()) || notInRange(startZ, neighbor.getZ())) continue;
 
-                        String neighborType = neighbor.getType().toString();
-
-                        if ((neighborType.endsWith("LOG") || neighborType.endsWith("LEAVES"))) {
-                            if (neighborType.endsWith("LOG")) tree.add(neighbor);
+                        if (isTreeBlock(neighbor, woodType)) {
+                            tree.add(neighbor);
                             checkedBlocks.add(neighbor);
                             queue.add(neighbor);
                         }
@@ -120,6 +125,23 @@ public class AxeEnchantments implements Listener {
             }
         }
         return tree;
+    }
+
+    private boolean isTreeBlock(Block block, String woodType) {
+        String name = block.getType().toString();
+
+        if (woodType.equals("CRIMSON_") && name.equals("NETHER_WART_BLOCK")) return true;
+        if (woodType.equals("WARPED_") && name.equals("WARPED_WART_BLOCK")) return true;
+
+        return name.startsWith(woodType) && (name.endsWith("LOG") || name.endsWith("WOOD") ||
+                name.endsWith("STEM") || name.endsWith("HYPHAE") || name.endsWith("LEAVES"));
+    }
+
+    private String getWoodType(Material material) {
+        String name = material.toString();
+        int index = name.lastIndexOf('_');
+
+        return index != -1 ? name.substring(0, index + 1) : null;
     }
 
     private boolean notInRange(int startPos, int pos2) {
